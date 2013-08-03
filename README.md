@@ -2,10 +2,8 @@
 
     :- use_module(library(jolog)).
     main &-
-        ( alpha
-        ; beta
-        ).
-    alpha, beta &-
+        hello ; world.
+    world, hello &-
         writeln('Hello jolog').
     main :-
         run_jolog(user).
