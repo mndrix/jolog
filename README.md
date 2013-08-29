@@ -2,7 +2,7 @@
 
     :- use_module(library(jolog)).
     main &-
-        hello ; world.
+        send(hello) & send(world).
     world, hello &-
         writeln('Hello jolog').
     main :-
