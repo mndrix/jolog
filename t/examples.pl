@@ -5,7 +5,7 @@ foo, bar(X) &-
     guard_two(X),
     then,
     (   process_one
-    ;   process_two
+    &   process_two
     ).
 
 pattern_only &- true.

@@ -20,7 +20,7 @@ jolog:parse_join_clause(
             guard_two(X),
             then,
             (   process_one(X)
-            ;   process_two
+            &   process_two
             )
     ),
     [foo,bar(X)],
