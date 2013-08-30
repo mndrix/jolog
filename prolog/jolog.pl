@@ -3,6 +3,7 @@
                 , jolog_import_sentinel/0
                 , send/1
                 , start_jolog/1
+                , start_jolog/2
                 ]).
 :- use_module(library(debug), [debug/3]).
 :- use_module(library(list_util), [split/3, xfy_list/3]).
@@ -11,16 +12,16 @@
 
 /************* Jolog runtime code *******************/
 
-%%	start_jolog(Module) is det
+%%	start_jolog(+Module,+Main) is det
 %
 %   Start running Jolog code defined in Module. After
-%   creating the runtime environment, this predicate sends a single
-%   message to the main/0 channel. Use this channel to trigger the rest
+%   creating the runtime environment, this predicate sends the Main
+%   message. Use that message to trigger the rest
 %   of your application. For example,
 %
 %       main :-  % starting point for Prolog
-%           start_jolog(user).
-%       main &-  % starting point for Jolog
+%           start_jolog(user, go).
+%       go &-  % starting point for Jolog
 %           ( one_process
 %           & another_process
 %           ).
@@ -28,7 +29,7 @@
 %
 %  start_jolog/1 returns as soon as a message is received on the halt/0
 %  channel.
-start_jolog(Module) :-
+start_jolog(Module,Main) :-
     % let workers know how they can reach the manager
     thread_self(Manager),
     set_meta(Module, manager, Manager),
@@ -46,8 +47,14 @@ start_jolog(Module) :-
 
     % start manager loop
     % TODO make it a separate thread so it can do thread local assert/1
-    Module:send(main),
+    Module:send(Main),
     manager_loop(Module).
+
+%%	start_jolog(+Module) is det.
+%
+%	Like start_jolog/2 using `main` as the first message.
+start_jolog(Module) :-
+    start_jolog(Module, main).
 
 
 %%	set_meta(+Module, +Name, +Value) is det.
