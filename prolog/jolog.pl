@@ -271,6 +271,9 @@ user:term_expansion(end_of_file, _) :-
     wants_jolog_expansion,
     prolog_load_context(module, Module),
 
+    % only add a 'halt' rule if there are other rules
+    Module:once(clause('$jolog_code', _)),
+
     term_expansion((
         halt &-
              debug(jolog, 'halting', []),
