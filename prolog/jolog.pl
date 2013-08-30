@@ -27,8 +27,10 @@
 %           ).
 %       ...
 %
-%  start_jolog/1 returns as soon as a message is received on the halt/0
-%  channel.
+%  start_jolog/1 returns when one of the following is true:
+%
+%    * a message arrives on the halt/0 channel
+%    * no join patterns match and no further progress can be made
 start_jolog(Module,Main) :-
     % let workers know how they can reach the manager
     thread_self(Manager),
@@ -48,7 +50,7 @@ start_jolog(Module,Main) :-
     % start manager loop
     % TODO make it a separate thread so it can do thread local assert/1
     Module:send(Main),
-    manager_loop(Module).
+    manager_loop(Module, 0).
 
 %%	start_jolog(+Module) is det.
 %
@@ -76,8 +78,14 @@ set_meta(Module, Name, Value) :-
 % Should only be called by the manager thread.
 spawn_process(Module, Process) :-
     debug(jolog, '~w', spawn_process(Module, Process)),
+
+    % put process code in the workers' queue
     meta(Module, workers, Workers),
-    thread_send_message(Workers, run_process(Process)).
+    thread_send_message(Workers, run_process(Process)),
+
+    % notify the manager that one more worker is active
+    meta(Module, manager, Manager),
+    thread_send_message(Manager, active(+1)).
 
 
 %%	send(+Message) is det
@@ -105,19 +113,31 @@ send(Module:Message) :-
     print_message(warning, jolog_nobody_listening(Module, Message)).
 
 
-manager_loop(Module) :-
+manager_loop(Module, Outstanding) :-
     debug(jolog, '~w', [manager(try_matching_joins)]),
     ( Module:'$jolog_code' ->   % try matching join patterns
-        manager_loop(Module)
+        manager_loop(Module, Outstanding)
     ; % otherwise ->
-        take_event_block(Event),
-        manager_loop(Module, Event)
+        debug(jolog, '~w', [manager(taking_event,Outstanding)]),
+        take_event_no_block(Event),
+        manager_loop(Module, Event, Outstanding)
     ).
-manager_loop(Module, Event) :-
+manager_loop(Module, Event, Outstanding) :-
     debug(jolog,'~w',[manager(event, Event)]),
 	( Event = send_message(Msg) ->
         assert(channels(Module,Msg)),
-        manager_loop(Module)
+        manager_loop(Module, Outstanding)
+    ; Event = active(N) ->
+        Outstanding1 is Outstanding + N,
+        take_event_no_block(Event1),
+        manager_loop(Module, Event1, Outstanding1)
+    ; Event = none ->
+        ( Outstanding > 0 ->  % block until pending workers are done
+            take_event_block(Event0),
+            manager_loop(Module, Event0, Outstanding)
+        ; true ->   % no chance of forward progress; stop Jolog
+            manager_loop(Module, send_message(halt), Outstanding)
+        )
     ; Event = halt ->
         true    % no more recursion
 	).
@@ -131,6 +151,17 @@ take_event_block(Event) :-
     thread_get_message(Self, Event).
 
 
+% Like take_event_block but binds Event to 'none' instead of blocking.
+% Should only be called by the manager thread.
+take_event_no_block(Event) :-
+    thread_self(Self),
+    ( thread_get_message(Self, Message, [timeout(0)]) ->
+        Event = Message
+    ; % otherwise ->
+        Event = none
+    ).
+
+
 % loop executed by Jolog worker threads
 worker_loop(Module, Queue) :-
     debug(jolog,'~w',[worker(loop)]),
@@ -139,14 +170,17 @@ worker_loop(Module, Queue) :-
     ( Work = halt ->
         thread_exit(halt)
     ; Work = run_process(Goal) ->
-        Module:ignore(Goal)
+        Module:ignore(Goal),
+        meta(Module, manager, Manager),
+        thread_send_message(Manager, active(-1))
     ; % otherwise ->
         domain_error(jolog_worker_message, Work)
     ),
     worker_loop(Module, Queue).
 
 
-/************* Macro expansion code *******************/
+
+/*************************** Macro expansion code ***********************/
 
 % junk predicate to let us create module-specific macros
 jolog_import_sentinel.
@@ -250,6 +284,7 @@ user:term_expansion(end_of_file, _) :-
              then
     ), Clause),
     Module:asserta(Clause),  % halt clause goes first
+    remember_channel(Module, halt),
 
     fail.  % let others have a chance to expand end_of_file
 

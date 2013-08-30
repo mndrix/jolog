@@ -19,5 +19,4 @@ main &-
 
 % Once there are messages on both the 'hello' and 'world' channels
 world, hello &-
-    writeln('Hello, World!'),
-    send(halt).  % stop Jolog
+    writeln('Hello, World!').
