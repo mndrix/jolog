@@ -27,7 +27,7 @@
 %           ).
 %       ...
 %
-%  start_jolog/1 returns when one of the following is true:
+%  start_jolog/2 returns when one of the following is true:
 %
 %    * a message arrives on the halt/0 channel
 %    * no join patterns match and no further progress can be made
@@ -92,7 +92,7 @@ spawn_process(Module, Process) :-
 %
 %   Sends a Jolog message to the relevant channel. Message should be a
 %   ground term whose functor indicates the channel and whose arguments
-%   indicatet the message. For example, the following are legitimate
+%   indicate the message. For example, the following are legitimate
 %   messages:
 %
 %       send(hello)         % hello/0 channel
@@ -182,7 +182,10 @@ worker_loop(Module, Queue) :-
 
 /*************************** Macro expansion code ***********************/
 
-% junk predicate to let us create module-specific macros
+%%	jolog_import_sentinel
+%
+%   Nothing to see here. This is a junk predicate to keep Jolog macro
+%   expansion isolated to those modules that want it.
 jolog_import_sentinel.
 
 
