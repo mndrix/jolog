@@ -119,7 +119,7 @@ message.
 
 # Changes in this Version
 
-    * First public release
+  * First public release
 
 # Installation
 
