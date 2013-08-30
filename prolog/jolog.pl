@@ -106,39 +106,26 @@ send(Module:Message) :-
 
 
 manager_loop(Module) :-
-    debug(jolog, '~w', [manager(loop)]),
-	take_event_no_block(Event),
-	manager_loop(Module, Event).
+    debug(jolog, '~w', [manager(try_matching_joins)]),
+    ( Module:'$jolog_code' ->   % try matching join patterns
+        manager_loop(Module)
+    ; % otherwise ->
+        take_event_block(Event),
+        manager_loop(Module, Event)
+    ).
 manager_loop(Module, Event) :-
     debug(jolog,'~w',[manager(event, Event)]),
 	( Event = send_message(Msg) ->
         assert(channels(Module,Msg)),
         manager_loop(Module)
-	; Event = none ->
-        debug(jolog, '~w', [manager(try_matching_joins)]),
-		( Module:'jolog_code' ->  % try matching join patterns
-			manager_loop(Module)
-		; take_event_block(Event1) ->
-			manager_loop(Module, Event1)
-		)
     ; Event = halt ->
         true    % no more recursion
 	).
 
 
-% Takes the next event that's available for the manager thread. Event is
-% none if there are no events available. This call does not
-% block.  Should only be called by the manager thread.
-take_event_no_block(Event) :-
-    thread_self(Self),
-    ( thread_get_message(Self, Message, [timeout(0)]) ->
-        Event = Message
-    ; % otherwise ->
-        Event = none
-    ).
-
-% Like take_event_no_block/1 but blocks if there are no events
-% available.  Should only be called by the manager thread.
+% Takes the next event that's available for the manager thread.
+% Blocks if there are no events available. Should only be called by
+% the manager thread.
 take_event_block(Event) :-
     thread_self(Self),
     thread_get_message(Self, Event).
@@ -221,7 +208,7 @@ remember_channel(Module, Pattern) :-
     ).
 
 
-user:term_expansion((Head &- Body), ('jolog_code' :- Goals)) :-
+user:term_expansion((Head &- Body), ('$jolog_code' :- Goals)) :-
     wants_jolog_expansion,
     parse_join_clause((Head &- Body), Patterns, Guards, Processes),
 
@@ -237,7 +224,7 @@ user:term_expansion((Head &- Body), ('jolog_code' :- Goals)) :-
     % build jolog clause body
     xfy_list(',', PeekGoals, Peeks),
     ( Guards=[] -> GuardGoals=true; xfy_list(',', GuardGoals, Guards) ),
-    Module:dynamic('jolog_code'/0),
+    Module:dynamic('$jolog_code'/0),
     Goals = (
         PeekGoals,
         GuardGoals,
