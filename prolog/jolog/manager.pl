@@ -31,6 +31,7 @@ handle_event(active(N), Module, Outstanding0) :-
     iterate_events(Module, Outstanding).
 handle_event(none, Module, Outstanding) :-
     ( Outstanding > 0 ->  % block until pending workers are done
+        debug(jolog, 'manager blocking', []),
         take_event_block(Event),
         handle_event(Event, Module, Outstanding)
     ; true ->   % no chance of forward progress; stop Jolog
