@@ -53,9 +53,8 @@ start_jolog(Module,Main) :-
           ),
 
     % start manager loop
-    % TODO make it a separate thread so it can do thread local assert/1
     Module:send(Main),
-    manager_loop(Module, 0).
+    manager_loop(Module).
 
 %%	start_jolog(+Module) is det.
 %

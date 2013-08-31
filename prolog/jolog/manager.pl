@@ -1,33 +1,42 @@
-:- module(jolog_manager, [ manager_loop/2 ]).
+:- module(jolog_manager, [ manager_loop/1 ]).
+
+manager_loop(Module) :-
+    manager_loop(Module, 0).
 
 manager_loop(Module, Outstanding) :-
-    debug(jolog, '~w', [manager(try_matching_joins)]),
-    ( Module:'$jolog_code' ->   % try matching join patterns
-        manager_loop(Module, Outstanding)
-    ; % otherwise ->
-        debug(jolog, '~w', [manager(taking_event,Outstanding)]),
-        take_event_no_block(Event),
-        manager_loop(Module, Event, Outstanding)
-    ).
-manager_loop(Module, Event, Outstanding) :-
+    iterate_patterns(Module, Outstanding).
+
+
+% match as many join patterns as possible
+iterate_patterns(Module, Outstanding) :-
+    debug(jolog, '~w', [manager(iterate_patterns)]),
+    Module:'$jolog_code',
+    !,
+    iterate_patterns(Module, Outstanding).
+iterate_patterns(Module, Outstanding) :-
+    iterate_events(Module, Outstanding).
+
+
+% process as many manager events as possible
+iterate_events(Module, Outstanding) :-
+    take_event_no_block(Event),
     debug(jolog,'~w',[manager(event, Event)]),
-	( Event = send_message(Msg) ->
-        jolog:assert(channels(Module,Msg)),
-        manager_loop(Module, Outstanding)
-    ; Event = active(N) ->
-        Outstanding1 is Outstanding + N,
-        take_event_no_block(Event1),
-        manager_loop(Module, Event1, Outstanding1)
-    ; Event = none ->
-        ( Outstanding > 0 ->  % block until pending workers are done
-            take_event_block(Event0),
-            manager_loop(Module, Event0, Outstanding)
-        ; true ->   % no chance of forward progress; stop Jolog
-            manager_loop(Module, send_message(halt), Outstanding)
-        )
-    ; Event = halt ->
-        true    % no more recursion
-	).
+    handle_event(Event, Module, Outstanding).
+
+handle_event(send_message(Msg), Module, Outstanding) :-
+    jolog:assert(channels(Module,Msg)),
+    iterate_patterns(Module, Outstanding).  % patterns might match now
+handle_event(active(N), Module, Outstanding0) :-
+    Outstanding is Outstanding0 + N,
+    iterate_events(Module, Outstanding).
+handle_event(none, Module, Outstanding) :-
+    ( Outstanding > 0 ->  % block until pending workers are done
+        take_event_block(Event),
+        handle_event(Event, Module, Outstanding)
+    ; true ->   % no chance of forward progress; stop Jolog
+        handle_event(send_message(halt), Module, Outstanding)
+    ).
+handle_event(halt, _, _).  % no more recursion
 
 
 % Takes the next event that's available for the manager thread.
