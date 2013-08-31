@@ -10,6 +10,11 @@
 :- use_module(library(lists), [same_length/2]).
 :- use_module(library(error), [domain_error/2]).
 
+:- use_module(library(jolog/manager)).
+
+
+:- thread_local channels/2.  % channels(Module, Message)
+
 /************* Jolog runtime code *******************/
 
 %%	start_jolog(+Module,+Main) is det
@@ -99,7 +104,6 @@ spawn_process(Module, Process) :-
 %       send(hello(world))  % hello/1 channel
 %       send(foo(alpha,beta,gamma,delta))  % foo/4 channel
 :- meta_predicate send(:).
-:- thread_local channels/2.  % channels(Module, Message)
 send(Module:Message) :-
     % someone listens on this channel; send the message
     functor(Message, Name, Arity),
@@ -111,56 +115,6 @@ send(Module:Message) :-
 send(Module:Message) :-
     % nobody listens on this channel; generate a warning
     print_message(warning, jolog_nobody_listening(Module, Message)).
-
-
-manager_loop(Module, Outstanding) :-
-    debug(jolog, '~w', [manager(try_matching_joins)]),
-    ( Module:'$jolog_code' ->   % try matching join patterns
-        manager_loop(Module, Outstanding)
-    ; % otherwise ->
-        debug(jolog, '~w', [manager(taking_event,Outstanding)]),
-        take_event_no_block(Event),
-        manager_loop(Module, Event, Outstanding)
-    ).
-manager_loop(Module, Event, Outstanding) :-
-    debug(jolog,'~w',[manager(event, Event)]),
-	( Event = send_message(Msg) ->
-        assert(channels(Module,Msg)),
-        manager_loop(Module, Outstanding)
-    ; Event = active(N) ->
-        Outstanding1 is Outstanding + N,
-        take_event_no_block(Event1),
-        manager_loop(Module, Event1, Outstanding1)
-    ; Event = none ->
-        ( Outstanding > 0 ->  % block until pending workers are done
-            take_event_block(Event0),
-            manager_loop(Module, Event0, Outstanding)
-        ; true ->   % no chance of forward progress; stop Jolog
-            manager_loop(Module, send_message(halt), Outstanding)
-        )
-    ; Event = halt ->
-        true    % no more recursion
-	).
-
-
-% Takes the next event that's available for the manager thread.
-% Blocks if there are no events available. Should only be called by
-% the manager thread.
-take_event_block(Event) :-
-    thread_self(Self),
-    thread_get_message(Self, Event).
-
-
-% Like take_event_block but binds Event to 'none' instead of blocking.
-% Should only be called by the manager thread.
-take_event_no_block(Event) :-
-    thread_self(Self),
-    ( thread_get_message(Self, Message, [timeout(0)]) ->
-        Event = Message
-    ; % otherwise ->
-        Event = none
-    ).
-
 
 % loop executed by Jolog worker threads
 worker_loop(Module, Queue) :-
