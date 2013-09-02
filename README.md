@@ -82,7 +82,7 @@ dispense an item if the balance exceeds the selected item's price.
         then,
         ...
 
-Before the ellided code (`...`) starts executing, the `balance/1` and
+Before the elided code (`...`) starts executing, the `balance/1` and
 `selected/1` messages are consumed and no longer available to other
 Jolog clauses.
 
