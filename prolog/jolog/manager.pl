@@ -9,7 +9,7 @@ manager_loop(Module, Outstanding) :-
 
 % match as many join patterns as possible
 iterate_patterns(Module, Outstanding) :-
-    debug(jolog, '~w', [manager(iterate_patterns)]),
+    debug(jolog, '~w', [manager(iterate_patterns,Outstanding)]),
     Module:'$jolog_code',
     !,
     iterate_patterns(Module, Outstanding).
@@ -24,10 +24,12 @@ iterate_events(Module, Outstanding) :-
     handle_event(Event, Module, Outstanding).
 
 handle_event(send_message(Msg), Module, Outstanding) :-
+   debug(jolog,"Sending message: ~w",[Msg]),
     jolog:assert(channels(Module,Msg)),
     iterate_patterns(Module, Outstanding).  % patterns might match now
 handle_event(active(N), Module, Outstanding0) :-
     Outstanding is Outstanding0 + N,
+    debug(jolog,"Outstanding workers: ~d -> ~d",[Outstanding0,Outstanding]),
     iterate_events(Module, Outstanding).
 handle_event(none, Module, Outstanding) :-
     ( Outstanding > 0 ->  % block until pending workers are done
@@ -35,6 +37,7 @@ handle_event(none, Module, Outstanding) :-
         take_event_block(Event),
         handle_event(Event, Module, Outstanding)
     ; true ->   % no chance of forward progress; stop Jolog
+        debug(jolog,"No events, no outstanding workers: sending halt",[]),
         handle_event(send_message(halt), Module, Outstanding)
     ).
 handle_event(halt, _, _).  % no more recursion

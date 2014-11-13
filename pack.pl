@@ -1,5 +1,5 @@
 name(jolog).
-version('0.0.1').
+version('0.0.2').
 title('Concurrency via join calculus').
 author('Michael Hendricks','michael@ndrix.org').
 packager('Michael Hendricks','michael@ndrix.org').

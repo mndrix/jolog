@@ -39,22 +39,44 @@
 start_jolog(Module,Main) :-
     % let workers know how they can reach the manager
     thread_self(Manager),
+    retractall(jolog:channels(_,_)),
     set_meta(Module, manager, Manager),
+    flush_message_queue(Manager),
 
     % create worker threads
-    message_queue_create(Workers),
-    set_meta(Module, workers, Workers),
-    current_prolog_flag(cpu_count, CoreCount),
-    WorkerCount is 2*CoreCount,
-    %WorkerCount is 1 + CoreCount-CoreCount,
-    set_meta(Module, worker_count, WorkerCount),
-    forall( between(1,WorkerCount,_)
-          , thread_create(worker_loop(Module, Workers), _, [detached(true)])
-          ),
+    setup_call_cleanup( 
+      message_queue_create(Queue),
+      (  set_meta(Module, workers, Queue),
+         current_prolog_flag(cpu_count, CoreCount),
+         WorkerCount is 2*CoreCount,
+         %WorkerCount is 1 + CoreCount-CoreCount,
+         set_meta(Module, worker_count, WorkerCount),
+         length(WorkerThreads,WorkerCount),
+         % create workers and start manager loop
+         debug(jolog,"Jolog: starting ~d worker threads.",[WorkerCount]),
+         setup_call_cleanup(
+            maplist(create_worker(Module,Queue),WorkerThreads),
+            (Module:send(Main), manager_loop(Module)),
+            maplist(destroy_worker,WorkerThreads)
+         )
+      ),
+      (  message_queue_destroy(Queue),
+         retractall(jolog:channels(_,_))
+      )
+   ).
 
-    % start manager loop
-    Module:send(Main),
-    manager_loop(Module).
+flush_message_queue(Q) :-
+   message_queue_property(Q,size(N)),
+   forall( between(1,N,_), thread_get_message(Q,_)).
+
+create_worker(Module,Queue,ThreadID) :-
+   thread_create(worker_loop(Module,Queue), ThreadID, [detached(true)]).
+
+destroy_worker(ThreadID) :-
+   (  current_thread(ThreadID,running) 
+   -> debug(jolog(threads),"Thread ~w still running, killing forcibly.",[ThreadID]),
+      thread_signal(ThreadID,throw(aborted))
+   ).
 
 %%	start_jolog(+Module) is det.
 %
@@ -117,14 +139,16 @@ send(Module:Message) :-
 
 % loop executed by Jolog worker threads
 worker_loop(Module, Queue) :-
-    debug(jolog,'~w',[worker(loop)]),
+    debug(jolog,'~w',[worker(waiting)]),
     thread_get_message(Queue, Work),
-    debug(jolog,'~w', [worker(Work)]),
+    debug(jolog,'~w', [worker(job(Work))]),
     ( Work = halt ->
         thread_exit(halt)
     ; Work = run_process(Goal) ->
-        Module:ignore(Goal),
+        catch( Module:ignore(Goal),
+               Ex, report_exception(Module,Goal,Ex)),
         meta(Module, manager, Manager),
+        debug(jolog,'~w',[worker(finished)]),
         thread_send_message(Manager, active(-1))
     ; % otherwise ->
         domain_error(jolog_worker_message, Work)
@@ -132,7 +156,9 @@ worker_loop(Module, Queue) :-
     worker_loop(Module, Queue).
 
 
-
+report_exception(Module,Goal,Ex) :- 
+   print_message(warning,jolog_worker_crashed(Module,Goal)),
+   print_message(warning,Ex).
 /*************************** Macro expansion code ***********************/
 
 %%	jolog_import_sentinel
@@ -247,3 +273,5 @@ user:term_expansion(end_of_file, _) :-
 
     fail.  % let others have a chance to expand end_of_file
 
+prolog:message(jolog_worker_crashed(Module,Goal)) -->
+   ["Caught exception in Jolog worker thread running ~q."-[Module:Goal]].
