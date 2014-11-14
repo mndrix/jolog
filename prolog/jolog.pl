@@ -46,15 +46,20 @@ start_jolog(Module,Main) :-
     set_meta(Module, workers, Workers),
     current_prolog_flag(cpu_count, CoreCount),
     WorkerCount is 2*CoreCount,
-    %WorkerCount is 1 + CoreCount-CoreCount,
     set_meta(Module, worker_count, WorkerCount),
-    forall( between(1,WorkerCount,_)
-          , thread_create(worker_loop(Module, Workers), _, [detached(true)])
-          ),
+    create_workers(WorkerCount,Module,Workers,_),
 
     % start manager loop
     Module:send(Main),
     manager_loop(Module).
+
+
+create_workers(Count,Module,Queue,WorkerThreads) :-
+    length(WorkerThreads,Count),
+    maplist(create_worker(Module,Queue),WorkerThreads).
+
+create_worker(Module,Queue,ThreadId) :-
+    thread_create(worker_loop(Module,Queue), ThreadId, [detached(true)]).
 
 %%	start_jolog(+Module) is det.
 %
