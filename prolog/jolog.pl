@@ -124,7 +124,7 @@ worker_loop(Module, Queue) :-
         debug(jolog,'worker exiting',[]),
         thread_exit(halt)
     ; Work = run_process(Goal) ->
-        Module:ignore(Goal),
+        catch(Module:ignore(Goal),Ex,report_exception(Module,Goal,Ex)),
         meta(Module, manager, Manager),
         debug(jolog,'~w',[worker(finished)]),
         thread_send_message(Manager, active(-1))
@@ -133,6 +133,14 @@ worker_loop(Module, Queue) :-
     ),
     worker_loop(Module, Queue).
 
+
+report_exception(Module,Goal,Ex) :-
+    print_message(warning,jolog_worker_crashed(Module,Goal)),
+    print_message(warning,Ex).
+
+
+prolog:message(jolog_worker_crashed(Module,Goal)) -->
+   ["Caught exception in Jolog worker running ~q."-[Module:Goal]].
 
 
 /*************************** Macro expansion code ***********************/
@@ -249,4 +257,3 @@ user:term_expansion(end_of_file, _) :-
     remember_channel(Module, halt),
 
     fail.  % let others have a chance to expand end_of_file
-
