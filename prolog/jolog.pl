@@ -117,14 +117,16 @@ send(Module:Message) :-
 
 % loop executed by Jolog worker threads
 worker_loop(Module, Queue) :-
-    debug(jolog,'~w',[worker(loop)]),
+    debug(jolog,'~w',[worker(waiting)]),
     thread_get_message(Queue, Work),
-    debug(jolog,'~w', [worker(Work)]),
+    debug(jolog,'~w', [worker(job(Work))]),
     ( Work = halt ->
+        debug(jolog,'worker exiting',[]),
         thread_exit(halt)
     ; Work = run_process(Goal) ->
         Module:ignore(Goal),
         meta(Module, manager, Manager),
+        debug(jolog,'~w',[worker(finished)]),
         thread_send_message(Manager, active(-1))
     ; % otherwise ->
         domain_error(jolog_worker_message, Work)
@@ -216,6 +218,7 @@ user:term_expansion((Head &- Body), ('$jolog_code' :- Goals)) :-
     ( Guards=[] -> GuardGoals=true; xfy_list(',', GuardGoals, Guards) ),
     Module:dynamic('$jolog_code'/0),
     Goals = (
+        debug(jolog,'Does head match? ~w', [Head]),
         PeekGoals,
         GuardGoals,
         !,
