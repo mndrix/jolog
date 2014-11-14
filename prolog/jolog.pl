@@ -42,12 +42,12 @@ start_jolog(Module,Main) :-
     set_meta(Module, manager, Manager),
 
     % create worker threads
-    message_queue_create(Workers),
-    set_meta(Module, workers, Workers),
+    message_queue_create(WorkQueue),
+    set_meta(Module, work_queue, WorkQueue),
     current_prolog_flag(cpu_count, CoreCount),
     WorkerCount is 2*CoreCount,
     set_meta(Module, worker_count, WorkerCount),
-    create_workers(WorkerCount,Module,Workers,_),
+    create_workers(WorkerCount,Module,WorkQueue,_),
 
     % start manager loop
     Module:send(Main),
@@ -89,8 +89,8 @@ spawn_process(Module, Process) :-
     debug(jolog, '~w', spawn_process(Module, Process)),
 
     % put process code in the workers' queue
-    meta(Module, workers, Workers),
-    thread_send_message(Workers, run_process(Process)),
+    meta(Module, work_queue, WorkQueue),
+    thread_send_message(WorkQueue, run_process(Process)),
 
     % notify the manager that one more worker is active
     meta(Module, manager, Manager),
@@ -250,10 +250,10 @@ user:term_expansion(end_of_file, _) :-
         halt &-
              debug(jolog, 'halting', []),
              jolog:meta(Module, worker_count, WorkerCount),
-             jolog:meta(Module, workers, Workers),
+             jolog:meta(Module, work_queue, WorkQueue),
              jolog:meta(Module, manager, Manager),
              forall( between(1,WorkerCount,_)
-                   , thread_send_message(Workers, halt)
+                   , thread_send_message(WorkQueue, halt)
                    ),
              thread_send_message(Manager, halt),
              then
