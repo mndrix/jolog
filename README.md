@@ -119,7 +119,7 @@ message.
 
 # Changes in this Version
 
-  * Stop leaking queues, threads and channel messages (Thanks Samer Abdallah)
+See History.md file.
 
 # Installation
 
