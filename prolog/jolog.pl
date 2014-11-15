@@ -38,8 +38,8 @@
 %    * no join patterns match and no further progress can be made
 start_jolog(Module,Main) :-
     % let workers know how they can reach the manager
-    thread_self(Manager),
-    set_meta(Module, manager, Manager),
+    message_queue_create(ManagerQueue),
+    set_meta(Module, manager_queue, ManagerQueue),
 
     % create worker threads
     message_queue_create(WorkQueue),
@@ -93,8 +93,8 @@ spawn_process(Module, Process) :-
     thread_send_message(WorkQueue, run_process(Process)),
 
     % notify the manager that one more worker is active
-    meta(Module, manager, Manager),
-    thread_send_message(Manager, active(+1)).
+    meta(Module, manager_queue, ManagerQueue),
+    thread_send_message(ManagerQueue, active(+1)).
 
 
 %%	send(+Message) is det
@@ -114,8 +114,8 @@ send(Module:Message) :-
     defined_channel(Module, Name, Arity),
     !,
     debug(jolog, '~w', [send(Module,Message)]),
-    meta(Module, manager, Manager),
-    thread_send_message(Manager, send_message(Message)).
+    meta(Module, manager_queue, ManagerQueue),
+    thread_send_message(ManagerQueue, send_message(Message)).
 send(Module:Message) :-
     % nobody listens on this channel; generate a warning
     print_message(warning, jolog_nobody_listening(Module, Message)).
@@ -130,9 +130,9 @@ worker_loop(Module, Queue) :-
         thread_exit(halt)
     ; Work = run_process(Goal) ->
         catch(Module:ignore(Goal),Ex,report_exception(Module,Goal,Ex)),
-        meta(Module, manager, Manager),
+        meta(Module, manager_queue, ManagerQueue),
         debug(jolog,'~w',[worker(finished)]),
-        thread_send_message(Manager, active(-1))
+        thread_send_message(ManagerQueue, active(-1))
     ; % otherwise ->
         domain_error(jolog_worker_message, Work)
     ),
@@ -251,11 +251,11 @@ user:term_expansion(end_of_file, _) :-
              debug(jolog, 'halting', []),
              jolog:meta(Module, worker_count, WorkerCount),
              jolog:meta(Module, work_queue, WorkQueue),
-             jolog:meta(Module, manager, Manager),
+             jolog:meta(Module, manager_queue, ManagerQueue),
              forall( between(1,WorkerCount,_)
                    , thread_send_message(WorkQueue, halt)
                    ),
-             thread_send_message(Manager, halt),
+             thread_send_message(ManagerQueue, halt),
              then
     ), Clause),
     Module:asserta(Clause),  % halt clause goes first
