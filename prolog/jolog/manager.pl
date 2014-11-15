@@ -24,14 +24,29 @@ manager_create(Module,StartupMessage) :-
     length(Workers,WorkerCount),
     debug(jolog,"Jolog: starting ~d worker threads.",[WorkerCount]),
     maplist(jolog:create_worker(Module,WorkQueue),Workers),
+    jolog:set_meta(Module, workers, Workers),
 
     Module:send(StartupMessage).
 
 
 % destroy a Jolog manager created with manager_create/2
 manager_destroy(Module) :-
+    jolog:meta(Module,workers,Workers),
+    maplist(destroy_worker,Workers),
+
+    jolog:meta(Module,work_queue,WorkQueue),
+    message_queue_destroy(WorkQueue),
+
+    jolog:meta(Module,manager_queue,ManagerQueue),
+    message_queue_destroy(ManagerQueue),
+
+    % don't leave messages or metadata lying around
     retractall(jolog:meta(Module,_,_)),
     retractall(jolog:channels(_,_)).
+
+destroy_worker(ThreadId) :-
+    debug(jolog,'Signaling worker ~d to stop',[ThreadId]),
+    thread_signal(ThreadId,thread_exit(halt)).
 
 
 % match as many join patterns as possible

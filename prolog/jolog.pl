@@ -235,12 +235,7 @@ user:term_expansion(end_of_file, _) :-
     term_expansion((
         halt &-
              debug(jolog, 'halting', []),
-             jolog:meta(Module, worker_count, WorkerCount),
-             jolog:meta(Module, work_queue, WorkQueue),
              jolog:meta(Module, manager_queue, ManagerQueue),
-             forall( between(1,WorkerCount,_)
-                   , thread_send_message(WorkQueue, halt)
-                   ),
              thread_send_message(ManagerQueue, halt),
              then
     ), Clause),
