@@ -1,10 +1,37 @@
-:- module(jolog_manager, [ manager_loop/1 ]).
+:- module(jolog_manager, [ manager_create/2
+                         , manager_destroy/1
+                         , manager_loop/1
+                         ]).
 
 manager_loop(Module) :-
     manager_loop(Module, 0).
 
 manager_loop(Module, Outstanding) :-
     iterate_patterns(Module, Outstanding).
+
+
+% create a Jolog manager
+manager_create(Module,StartupMessage) :-
+    message_queue_create(ManagerQueue),
+    jolog:set_meta(Module, manager_queue, ManagerQueue),
+
+    message_queue_create(WorkQueue),
+    jolog:set_meta(Module, work_queue, WorkQueue),
+
+    current_prolog_flag(cpu_count,CoreCount),
+    WorkerCount is 2*CoreCount,
+    jolog:set_meta(Module, worker_count, WorkerCount),
+    length(Workers,WorkerCount),
+    debug(jolog,"Jolog: starting ~d worker threads.",[WorkerCount]),
+    maplist(jolog:create_worker(Module,WorkQueue),Workers),
+
+    Module:send(StartupMessage).
+
+
+% destroy a Jolog manager created with manager_create/2
+manager_destroy(Module) :-
+    retractall(jolog:meta(Module,_,_)),
+    retractall(jolog:channels(_,_)).
 
 
 % match as many join patterns as possible

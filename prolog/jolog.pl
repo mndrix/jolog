@@ -37,29 +37,15 @@
 %    * a message arrives on the halt/0 channel
 %    * no join patterns match and no further progress can be made
 start_jolog(Module,Main) :-
-    % let workers know how they can reach the manager
-    message_queue_create(ManagerQueue),
-    set_meta(Module, manager_queue, ManagerQueue),
-
-    % create worker threads
-    message_queue_create(WorkQueue),
-    set_meta(Module, work_queue, WorkQueue),
-    current_prolog_flag(cpu_count, CoreCount),
-    WorkerCount is 2*CoreCount,
-    set_meta(Module, worker_count, WorkerCount),
-    create_workers(WorkerCount,Module,WorkQueue,_),
-
-    % start manager loop
-    Module:send(Main),
-    manager_loop(Module).
-
-
-create_workers(Count,Module,Queue,WorkerThreads) :-
-    length(WorkerThreads,Count),
-    maplist(create_worker(Module,Queue),WorkerThreads).
+    setup_call_cleanup(
+        manager_create(Module,Main),
+        manager_loop(Module),
+        manager_destroy(Module)
+    ).
 
 create_worker(Module,Queue,ThreadId) :-
     thread_create(worker_loop(Module,Queue), ThreadId, [detached(true)]).
+
 
 %%	start_jolog(+Module) is det.
 %
