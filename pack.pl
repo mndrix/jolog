@@ -2,7 +2,7 @@ name(jolog).
 title('Concurrency via join calculus').
 
 version('0.0.3').
-download('https://github.com/mndrix/ddata/archive/v0.0.3.zip').
+download('https://github.com/mndrix/jolog/archive/v0.0.3.zip').
 
 author('Michael Hendricks','michael@ndrix.org').
 packager('Michael Hendricks','michael@ndrix.org').
